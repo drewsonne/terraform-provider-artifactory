@@ -2,7 +2,9 @@ package artifactory
 
 import (
 	"log"
+	"time"
 
+	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/helper/validation"
 )
@@ -179,7 +181,15 @@ func resourceVirtualRepositoryDelete(d *schema.ResourceData, m interface{}) erro
 	log.Printf("[TRACE] Deleting artifactory.virtual_repository Id=%s\n", d.Id())
 	c := m.(Client)
 	key := d.Id()
-	return c.DeleteRepository(key)
+
+	return resource.Retry(5*time.Minute, func() *resource.RetryError {
+		err := c.DeleteRepository(key)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+		return nil
+	})
+
 }
 
 func virtualRepositoryImportStatePassthrough(d *schema.ResourceData, m interface{}) (s []*schema.ResourceData, err error) {

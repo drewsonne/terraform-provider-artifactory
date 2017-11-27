@@ -1,6 +1,9 @@
 package artifactory
 
 import (
+	"time"
+
+	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/helper/validation"
 )
@@ -164,7 +167,13 @@ func resourceLocalRepositoryCreate(d *schema.ResourceData, m interface{}) error 
 	c := m.(Client)
 	repo := newLocalRepositoryFromResource(d)
 
-	err := c.CreateRepository(repo.Key, repo)
+	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
+		err := c.CreateRepository(repo.Key, repo)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+		return nil
+	})
 
 	if err != nil {
 		return err
@@ -180,7 +189,13 @@ func resourceLocalRepositoryRead(d *schema.ResourceData, m interface{}) error {
 
 	var repo LocalRepositoryConfiguration
 
-	err := c.GetRepository(key, &repo)
+	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
+		err := c.GetRepository(key, &repo)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+		return nil
+	})
 
 	if err != nil {
 		return err
@@ -221,7 +236,15 @@ func resourceLocalRepositoryRead(d *schema.ResourceData, m interface{}) error {
 func resourceLocalRepositoryUpdate(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	repo := newLocalRepositoryFromResource(d)
-	err := c.UpdateRepository(repo.Key, repo)
+
+	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
+		err := c.UpdateRepository(repo.Key, repo)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+		return nil
+	})
+
 	if err != nil {
 		return err
 	}
@@ -231,5 +254,7 @@ func resourceLocalRepositoryUpdate(d *schema.ResourceData, m interface{}) error 
 func resourceLocalRepositoryDelete(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	key := d.Id()
-	return c.DeleteRepository(key)
+	return retry(func() error {
+		return c.DeleteRepository(key)
+	})
 }

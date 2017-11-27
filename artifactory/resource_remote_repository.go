@@ -245,9 +245,9 @@ func newRemoteRepositoryFromResource(d *schema.ResourceData) *RemoteRepositoryCo
 func resourceRemoteRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	repo := newRemoteRepositoryFromResource(d)
-
-	err := c.CreateRepository(repo.Key, repo)
-
+	err := retry(func() error {
+		return c.CreateRepository(repo.Key, repo)
+	})
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,9 @@ func resourceRemoteRepositoryRead(d *schema.ResourceData, m interface{}) error {
 	key := d.Id()
 	var repo RemoteRepositoryConfiguration
 
-	err := c.GetRepository(key, &repo)
+	err := retry(func() error {
+		return c.GetRepository(key, &repo)
+	})
 
 	if err != nil {
 		return err
@@ -317,7 +319,9 @@ func resourceRemoteRepositoryRead(d *schema.ResourceData, m interface{}) error {
 func resourceRemoteRepositoryUpdate(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	repo := newRemoteRepositoryFromResource(d)
-	err := c.UpdateRepository(repo.Key, repo)
+	err := retry(func() error {
+		return c.UpdateRepository(repo.Key, repo)
+	})
 	if err != nil {
 		return err
 	}
@@ -327,7 +331,9 @@ func resourceRemoteRepositoryUpdate(d *schema.ResourceData, m interface{}) error
 func resourceRemoteRepositoryDelete(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	key := d.Get("key").(string)
-	return c.DeleteRepository(key)
+	return retry(func() error {
+		return c.DeleteRepository(key)
+	})
 }
 
 // resourceRemoteDescriptionDiffSuppress suppresses local file cache added to description
