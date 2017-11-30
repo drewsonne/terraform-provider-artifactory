@@ -133,6 +133,7 @@ type Client interface {
 	CreateRepository(key string, v interface{}) error
 	UpdateRepository(key string, v interface{}) error
 	DeleteRepository(key string) error
+	ExistsRepository(key string) (bool, error)
 	GetUser(name string) (*User, error)
 	CreateUser(u *User) error
 	UpdateUser(u *User) error
@@ -249,6 +250,40 @@ func (c clientConfig) DeleteRepository(key string) error {
 	}
 
 	return resp.Body.Close()
+}
+
+// ExistsRepository checks if a repository exists
+func (c clientConfig) ExistsRepository(key string) (bool, error) {
+	resp, err := c.execute("GET", "repositories", nil)
+
+	if err != nil {
+		return false, err
+	}
+
+	if err := c.validateResponse(200, resp.StatusCode, "list repositories"); err != nil {
+		return false, err
+	}
+
+	type stubRepo struct {
+		Key  string `json:"key"`
+		Type string `json:"type"`
+	}
+
+	repos := []stubRepo{}
+
+	decoder := json.NewDecoder(resp.Body)
+	err = decoder.Decode(&repos)
+	if err != nil {
+		return false, err
+	}
+
+	for _, repo := range repos {
+		if key == repo.Key {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // GetUser returns a User from Artifactory

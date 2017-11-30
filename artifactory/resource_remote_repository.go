@@ -2,7 +2,9 @@ package artifactory
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/helper/validation"
 )
@@ -245,8 +247,17 @@ func newRemoteRepositoryFromResource(d *schema.ResourceData) *RemoteRepositoryCo
 func resourceRemoteRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	repo := newRemoteRepositoryFromResource(d)
-	err := retry(func() error {
-		return c.CreateRepository(repo.Key, repo)
+	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
+		err := c.CreateRepository(repo.Key, repo)
+		if err != nil {
+			return resource.NonRetryableError(err)
+		}
+
+		exists, err := c.ExistsRepository(repo.Key)
+		if !exists {
+			return resource.RetryableError(err)
+		}
+		return resource.NonRetryableError(err)
 	})
 	if err != nil {
 		return err
@@ -261,8 +272,23 @@ func resourceRemoteRepositoryRead(d *schema.ResourceData, m interface{}) error {
 	key := d.Id()
 	var repo RemoteRepositoryConfiguration
 
-	err := retry(func() error {
-		return c.GetRepository(key, &repo)
+	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
+		exists, err := c.ExistsRepository(key)
+		//if !exists {
+		//	return resource.RetryableError(err)
+		//}
+
+		err = c.GetRepository(key, &repo)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+
+		exists, err = c.ExistsRepository(key)
+		if exists {
+			return resource.RetryableError(err)
+		}
+
+		return resource.NonRetryableError(err)
 	})
 
 	if err != nil {
@@ -319,9 +345,7 @@ func resourceRemoteRepositoryRead(d *schema.ResourceData, m interface{}) error {
 func resourceRemoteRepositoryUpdate(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	repo := newRemoteRepositoryFromResource(d)
-	err := retry(func() error {
-		return c.UpdateRepository(repo.Key, repo)
-	})
+	err := c.UpdateRepository(repo.Key, repo)
 	if err != nil {
 		return err
 	}
@@ -331,8 +355,23 @@ func resourceRemoteRepositoryUpdate(d *schema.ResourceData, m interface{}) error
 func resourceRemoteRepositoryDelete(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	key := d.Get("key").(string)
-	return retry(func() error {
-		return c.DeleteRepository(key)
+	return resource.Retry(5*time.Minute, func() *resource.RetryError {
+		exists, err := c.ExistsRepository(key)
+		if !exists {
+			return nil
+		}
+
+		err = c.DeleteRepository(key)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+
+		exists, err = c.ExistsRepository(key)
+		if exists {
+			return resource.RetryableError(err)
+		}
+
+		return resource.NonRetryableError(err)
 	})
 }
 

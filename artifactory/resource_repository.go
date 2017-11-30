@@ -2,9 +2,6 @@ package artifactory
 
 import (
 	"strings"
-	"time"
-
-	"github.com/hashicorp/terraform/helper/resource"
 )
 
 var types,
@@ -25,17 +22,4 @@ func init() {
 	vcsType = []string{"", "git"}
 	vcsGitProviders = []string{"", "github", "bitbucket", "stash", "artifactory", "custom"}
 	pomRepositoryReferencesCleanupPolicy = []string{"discard_active_reference", "discard_any_reference", "nothing"}
-}
-
-type retryFunc func() error
-
-func retry(f retryFunc) error {
-	return resource.Retry(5*time.Minute, func() *resource.RetryError {
-		err := f()
-		if err != nil {
-			return resource.RetryableError(err)
-		}
-		return nil
-	})
-
 }

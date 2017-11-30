@@ -111,10 +111,8 @@ func newVirtualRepositoryFromResource(d *schema.ResourceData) *VirtualRepository
 func resourceRepositoryExists(d *schema.ResourceData, m interface{}) (exists bool, err error) {
 	c := m.(Client)
 	key := d.Id()
-	var repo VirtualRepositoryConfiguration
 
-	err = c.GetRepository(key, &repo)
-	exists = (repo.Key == key)
+	exists, err = c.ExistsRepository(key)
 
 	return
 }
@@ -139,7 +137,24 @@ func resourceVirtualRepositoryRead(d *schema.ResourceData, m interface{}) error 
 	key := d.Id()
 	var repo VirtualRepositoryConfiguration
 
-	err := c.GetRepository(key, &repo)
+	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
+		exists, err := c.ExistsRepository(key)
+		//if !exists {
+		//	return resource.RetryableError(err)
+		//}
+
+		err = c.GetRepository(key, &repo)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+
+		exists, err = c.ExistsRepository(key)
+		if exists {
+			return resource.RetryableError(err)
+		}
+
+		return resource.NonRetryableError(err)
+	})
 
 	if err != nil {
 		return err
@@ -183,13 +198,23 @@ func resourceVirtualRepositoryDelete(d *schema.ResourceData, m interface{}) erro
 	key := d.Id()
 
 	return resource.Retry(5*time.Minute, func() *resource.RetryError {
-		err := c.DeleteRepository(key)
+		exists, err := c.ExistsRepository(key)
+		if !exists {
+			return nil
+		}
+
+		err = c.DeleteRepository(key)
 		if err != nil {
 			return resource.RetryableError(err)
 		}
-		return nil
-	})
 
+		exists, err = c.ExistsRepository(key)
+		if exists {
+			return resource.RetryableError(err)
+		}
+
+		return resource.NonRetryableError(err)
+	})
 }
 
 func virtualRepositoryImportStatePassthrough(d *schema.ResourceData, m interface{}) (s []*schema.ResourceData, err error) {

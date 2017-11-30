@@ -170,9 +170,14 @@ func resourceLocalRepositoryCreate(d *schema.ResourceData, m interface{}) error 
 	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
 		err := c.CreateRepository(repo.Key, repo)
 		if err != nil {
+			return resource.NonRetryableError(err)
+		}
+
+		exists, err := c.ExistsRepository(repo.Key)
+		if !exists {
 			return resource.RetryableError(err)
 		}
-		return nil
+		return resource.NonRetryableError(err)
 	})
 
 	if err != nil {
@@ -190,11 +195,22 @@ func resourceLocalRepositoryRead(d *schema.ResourceData, m interface{}) error {
 	var repo LocalRepositoryConfiguration
 
 	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
-		err := c.GetRepository(key, &repo)
+		exists, err := c.ExistsRepository(key)
+		//if !exists {
+		//	return resource.RetryableError(err)
+		//}
+
+		err = c.GetRepository(key, &repo)
 		if err != nil {
 			return resource.RetryableError(err)
 		}
-		return nil
+
+		exists, err = c.ExistsRepository(key)
+		if exists {
+			return resource.RetryableError(err)
+		}
+
+		return resource.NonRetryableError(err)
 	})
 
 	if err != nil {
@@ -237,13 +253,7 @@ func resourceLocalRepositoryUpdate(d *schema.ResourceData, m interface{}) error 
 	c := m.(Client)
 	repo := newLocalRepositoryFromResource(d)
 
-	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
-		err := c.UpdateRepository(repo.Key, repo)
-		if err != nil {
-			return resource.RetryableError(err)
-		}
-		return nil
-	})
+	err := c.UpdateRepository(repo.Key, repo)
 
 	if err != nil {
 		return err
@@ -254,7 +264,22 @@ func resourceLocalRepositoryUpdate(d *schema.ResourceData, m interface{}) error 
 func resourceLocalRepositoryDelete(d *schema.ResourceData, m interface{}) error {
 	c := m.(Client)
 	key := d.Id()
-	return retry(func() error {
-		return c.DeleteRepository(key)
+	return resource.Retry(5*time.Minute, func() *resource.RetryError {
+		exists, err := c.ExistsRepository(key)
+		if !exists {
+			return nil
+		}
+
+		err = c.DeleteRepository(key)
+		if err != nil {
+			return resource.RetryableError(err)
+		}
+
+		exists, err = c.ExistsRepository(key)
+		if exists {
+			return resource.RetryableError(err)
+		}
+
+		return resource.NonRetryableError(err)
 	})
 }
